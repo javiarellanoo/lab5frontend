@@ -1,74 +1,68 @@
 import React, { useEffect, useState } from 'react'
-import { Image, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Image, Platform, Pressable, ScrollView, StyleSheet, View, Switch } from 'react-native'
 import * as ExpoImagePicker from 'expo-image-picker'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import * as yup from 'yup'
 import DropDownPicker from 'react-native-dropdown-picker'
-import { getRestaurantCategories, getDetail, update } from '../../api/RestaurantEndpoints'
+
 import InputItem from '../../components/InputItem'
 import TextRegular from '../../components/TextRegular'
 import * as GlobalStyles from '../../styles/GlobalStyles'
 import restaurantLogo from '../../../assets/restaurantLogo.jpeg'
-import restaurantBackground from '../../../assets/restaurantBackground.jpeg'
 import { showMessage } from 'react-native-flash-message'
 import { ErrorMessage, Formik } from 'formik'
 import TextError from '../../components/TextError'
 import { prepareEntityImages } from '../../api/helpers/FileUploadHelper'
 import { buildInitialValues } from '../Helper'
+import { getProductCategories, update, getDetail } from '../../api/ProductEndpoints'
 
-export default function EditRestaurantScreen ({ navigation, route }) {
+export default function EditProductScreen ({ navigation, route }) {
+  const [product, setProduct] = useState({})
+
+  const [initialRestaurantValues, setInitialRestaurantValues] = useState({ name: null, description: null, price: null, order: null, availability: null, productCategoryId: null, image: null })
   const [open, setOpen] = useState(false)
-  const [restaurantCategories, setRestaurantCategories] = useState([])
+  const [productCategories, setProductCategories] = useState([])
+
   const [backendErrors, setBackendErrors] = useState()
-  const [restaurant, setRestaurant] = useState({})
-  const [initialRestaurantValues, setInitialRestaurantValues] = useState({ name: null, description: null, address: null, postalCode: null, url: null, shippingCosts: null, email: null, phone: null, restaurantCategoryId: null, logo: null, heroImage: null })
+
   const validationSchema = yup.object().shape({
     name: yup
       .string()
       .max(255, 'Name too long')
       .required('Name is required'),
-    address: yup
+    description: yup
       .string()
-      .max(255, 'Address too long')
-      .required('Address is required'),
-    postalCode: yup
-      .string()
-      .max(255, 'Postal code too long')
-      .required('Postal code is required'),
-    url: yup
-      .string()
-      .nullable()
-      .url('Please enter a valid url'),
-    shippingCosts: yup
+      .max(255, 'Description too long'),
+    price: yup
       .number()
-      .positive('Please provide a valid shipping cost value')
-      .required('Shipping costs value is required'),
-    email: yup
-      .string()
-      .nullable()
-      .email('Please enter a valid email'),
-    phone: yup
-      .string()
-      .nullable()
-      .max(255, 'Phone too long'),
-    restaurantCategoryId: yup
+      .positive('Please provide a valid price value')
+      .required('Price value is required'),
+    order: yup
+      .number()
+      .positive(),
+    availability: yup
+      .bool()
+      .required('Availability costs value is required'),
+
+    productCategoryId: yup
       .number()
       .positive()
       .integer()
-      .required('Restaurant category is required')
+      .required('Product category is required')
+
   })
 
   useEffect(() => {
-    async function fetchRestaurantCategories () {
+    async function fetchProductCategories () {
       try {
-        const fetchedRestaurantCategories = await getRestaurantCategories()
+        const fetchedRestaurantCategories = await getProductCategories()
         const fetchedRestaurantCategoriesReshaped = fetchedRestaurantCategories.map((e) => {
           return {
             label: e.name,
             value: e.id
           }
         })
-        setRestaurantCategories(fetchedRestaurantCategoriesReshaped)
+        setProductCategories(fetchedRestaurantCategoriesReshaped)
       } catch (error) {
         showMessage({
           message: `There was an error while retrieving restaurant categories. ${error} `,
@@ -78,25 +72,15 @@ export default function EditRestaurantScreen ({ navigation, route }) {
         })
       }
     }
-    fetchRestaurantCategories()
+    fetchProductCategories()
   }, [])
 
   useEffect(() => {
-    (async () => {
-      if (Platform.OS !== 'web') {
-        const { status } = await ExpoImagePicker.requestMediaLibraryPermissionsAsync()
-        if (status !== 'granted') {
-          alert('Sorry, we need camera roll permissions to make this work!')
-        }
-      }
-    })()
-  }, [])
-  useEffect(() => {
-    async function fetchRestaurantDetail () {
+    async function fetchProductDetail () {
       try {
         const fetchedRestaurant = await getDetail(route.params.id)
-        const preparedRestaurant = prepareEntityImages(fetchedRestaurant, ['logo', 'heroImage'])
-        setRestaurant(preparedRestaurant)
+        const preparedRestaurant = prepareEntityImages(fetchedRestaurant, ['image'])
+        setProduct(preparedRestaurant)
         const initialValues = buildInitialValues(preparedRestaurant, initialRestaurantValues)
         setInitialRestaurantValues(initialValues)
       } catch (error) {
@@ -108,8 +92,35 @@ export default function EditRestaurantScreen ({ navigation, route }) {
         })
       }
     }
-    fetchRestaurantDetail()
+    fetchProductDetail()
   }, [route])
+
+  useEffect(() => {
+    (async () => {
+      if (Platform.OS !== 'web') {
+        const { status } = await ExpoImagePicker.requestMediaLibraryPermissionsAsync()
+        if (status !== 'granted') {
+          alert('Sorry, we need camera roll permissions to make this work!')
+        }
+      }
+    })()
+  }, [])
+  const updateRestaurant = async (values) => {
+    setBackendErrors([])
+    try {
+      const updatedRestaurant = await update(product.id, values)
+      showMessage({
+        message: `Product ${updatedRestaurant.name} succesfully updated`,
+        type: 'success',
+        style: GlobalStyles.flashStyle,
+        titleStyle: GlobalStyles.flashTextStyle
+      })
+      navigation.navigate('RestaurantsScreen', { dirty: true })
+    } catch (error) {
+      console.log(error)
+      setBackendErrors(error.errors)
+    }
+  }
 
   const pickImage = async (onSuccess) => {
     const result = await ExpoImagePicker.launchImageLibraryAsync({
@@ -124,31 +135,14 @@ export default function EditRestaurantScreen ({ navigation, route }) {
       }
     }
   }
-  const updateRestaurant = async (values) => {
-    setBackendErrors([])
-    try {
-      const updatedRestaurant = await update(restaurant.id, values)
-      showMessage({
-        message: `Restaurant ${updatedRestaurant.name} succesfully updated`,
-        type: 'success',
-        style: GlobalStyles.flashStyle,
-        titleStyle: GlobalStyles.flashTextStyle
-      })
-      navigation.navigate('RestaurantsScreen', { dirty: true })
-    } catch (error) {
-      console.log(error)
-      setBackendErrors(error.errors)
-    }
-  }
 
   return (
     <Formik
       validationSchema={validationSchema}
-      // include the formik properties here
       enableReinitialize
       initialValues={initialRestaurantValues}
-      onSubmit={updateRestaurant}
-      >
+      onSubmit={updateRestaurant}>
+
       {({ handleSubmit, setFieldValue, values }) => (
         <ScrollView>
           <View style={{ alignItems: 'center' }}>
@@ -162,70 +156,51 @@ export default function EditRestaurantScreen ({ navigation, route }) {
                 label='Description:'
               />
               <InputItem
-                name='address'
-                label='Address:'
+                name='price'
+                label='price:'
               />
               <InputItem
-                name='postalCode'
-                label='Postal code:'
+                name='order'
+                label='order :'
               />
-              <InputItem
-                name='url'
-                label='Url:'
+           <TextRegular>Is it available?</TextRegular>
+              <Switch
+                trackColor={{ false: GlobalStyles.brandSecondary, true: GlobalStyles.brandPrimary }}
+                thumbColor={values.availability ? GlobalStyles.brandSecondary : '#f4f3f4'}
+                value={values.availability}
+                style={styles.switch}
+                onValueChange={value =>
+                  setFieldValue('availability', value)
+                }
               />
-              <InputItem
-                name='shippingCosts'
-                label='Shipping costs:'
-              />
-              <InputItem
-                name='email'
-                label='Email:'
-              />
-              <InputItem
-                name='phone'
-                label='Phone:'
-              />
-
+              <ErrorMessage name={'availability'} render={msg => <TextError>{msg}</TextError> }/>
               <DropDownPicker
                 open={open}
-                value={values.restaurantCategoryId}
-                items={restaurantCategories}
+                value={values.productCategoryId}
+                items={productCategories}
                 setOpen={setOpen}
                 onSelectItem={ item => {
-                  setFieldValue('restaurantCategoryId', item.value)
+                  setFieldValue('productCategoryId', item.value)
                 }}
-                setItems={setRestaurantCategories}
-                placeholder="Select the restaurant category"
+                setItems={setProductCategories}
+                placeholder="Select the product category"
                 containerStyle={{ height: 40, marginTop: 20 }}
                 style={{ backgroundColor: GlobalStyles.brandBackground }}
                 dropDownStyle={{ backgroundColor: '#fafafa' }}
               />
-              <ErrorMessage name={'restaurantCategoryId'} render={msg => <TextError>{msg}</TextError> }/>
+              <ErrorMessage name={'productCategoryId'} render={msg => <TextError>{msg}</TextError> }/>
 
               <Pressable onPress={() =>
                 pickImage(
                   async result => {
-                    await setFieldValue('logo', result)
+                    await setFieldValue('image', result)
                   }
                 )
               }
                 style={styles.imagePicker}
               >
-                <TextRegular>Logo: </TextRegular>
+                <TextRegular>Image: </TextRegular>
                 <Image style={styles.image} source={values.logo ? { uri: values.logo.assets[0].uri } : restaurantLogo} />
-              </Pressable>
-
-              <Pressable onPress={() =>
-                pickImage(
-                  async result => {
-                    await setFieldValue('heroImage', result)
-                  }
-                )
-              }
-                style={styles.imagePicker}
-              >
-                <TextRegular>Hero image: </TextRegular>
-                <Image style={styles.image} source={values.heroImage ? { uri: values.heroImage.assets[0].uri } : restaurantBackground} />
               </Pressable>
 
               {backendErrors &&
@@ -244,8 +219,8 @@ export default function EditRestaurantScreen ({ navigation, route }) {
                 ]}>
                 <View style={[{ flex: 1, flexDirection: 'row', justifyContent: 'center' }]}>
                   <MaterialCommunityIcons name='content-save' color={'white'} size={20}/>
-                  <TextRegular textStyle={styles.text}>
                     Save
+                  <TextRegular textStyle={styles.text}>
                   </TextRegular>
                 </View>
               </Pressable>

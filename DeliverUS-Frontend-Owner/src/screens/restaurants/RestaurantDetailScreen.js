@@ -9,12 +9,15 @@ import TextRegular from '../../components/TextRegular'
 import TextSemiBold from '../../components/TextSemibold'
 import * as GlobalStyles from '../../styles/GlobalStyles'
 import defaultProductImage from '../../../assets/product.jpeg'
+import DeleteModal from '../../components/DeleteModal'
+import { remove } from '../../api/ProductEndpoints'
 
 export default function RestaurantDetailScreen ({ navigation, route }) {
   const [restaurant, setRestaurant] = useState({})
+  const [productToBeDeleted, setProductToBeDeleted] = useState(null)
 
   useEffect(() => {
-    fetchRestaurantDetail()
+    fetchProductDetail()
   }, [route])
 
   const renderHeader = () => {
@@ -62,6 +65,41 @@ export default function RestaurantDetailScreen ({ navigation, route }) {
         {!item.availability &&
           <TextRegular textStyle={styles.availability }>Not available</TextRegular>
         }
+        <Pressable
+onPress={() => navigation.navigate('EditProductScreen', { id: item.id })}
+  style={({ pressed }) => [
+    {
+      backgroundColor: pressed
+        ? GlobalStyles.brandBlueTap
+        : GlobalStyles.brandBlue
+    },
+    styles.actionButton
+  ]}>
+  <View style={[{ flex: 1, flexDirection: 'row', justifyContent: 'center' }]}>
+    <MaterialCommunityIcons name='pencil' color={'white'} size={20}/>
+    <TextRegular textStyle={styles.text}>
+      Edit
+    </TextRegular>
+  </View>
+</Pressable>
+
+<Pressable
+  onPress={() => { setProductToBeDeleted(item) }}
+    style={({ pressed }) => [
+      {
+        backgroundColor: pressed
+          ? GlobalStyles.brandPrimaryTap
+          : GlobalStyles.brandPrimary
+      },
+      styles.actionButton
+    ]}>
+  <View style={[{ flex: 1, flexDirection: 'row', justifyContent: 'center' }]}>
+    <MaterialCommunityIcons name='delete' color={'white'} size={20}/>
+    <TextRegular textStyle={styles.text}>
+      Delete
+    </TextRegular>
+  </View>
+</Pressable>
       </ImageCard>
     )
   }
@@ -74,13 +112,35 @@ export default function RestaurantDetailScreen ({ navigation, route }) {
     )
   }
 
-  const fetchRestaurantDetail = async () => {
+  const fetchProductDetail = async () => {
     try {
-      const fetchedRestaurant = await getDetail(route.params.id)
-      setRestaurant(fetchedRestaurant)
+      const fetchedProduct = await getDetail(route.params.id)
+      setRestaurant(fetchedProduct)
     } catch (error) {
       showMessage({
-        message: `There was an error while retrieving restaurant details (id ${route.params.id}). ${error}`,
+        message: `There was an error while retrieving product details (id ${route.params.id}). ${error}`,
+        type: 'error',
+        style: GlobalStyles.flashStyle,
+        titleStyle: GlobalStyles.flashTextStyle
+      })
+    }
+  }
+  const removeProduct = async (restaurant) => {
+    try {
+      await remove(restaurant.id)
+      await fetchProductDetail()
+      setProductToBeDeleted(null)
+      showMessage({
+        message: `Product ${restaurant.name} succesfully removed`,
+        type: 'success',
+        style: GlobalStyles.flashStyle,
+        titleStyle: GlobalStyles.flashTextStyle
+      })
+    } catch (error) {
+      console.log(error)
+      setProductToBeDeleted(null)
+      showMessage({
+        message: `Product ${restaurant.name} could not be removed.`,
         type: 'error',
         style: GlobalStyles.flashStyle,
         titleStyle: GlobalStyles.flashTextStyle
@@ -98,6 +158,11 @@ export default function RestaurantDetailScreen ({ navigation, route }) {
         renderItem={renderProduct}
         keyExtractor={item => item.id.toString()}
       />
+      <DeleteModal
+        isVisible={productToBeDeleted !== null}
+        onCancel={() => setProductToBeDeleted(null)}
+        onConfirm={() => removeProduct(productToBeDeleted)}>
+      </DeleteModal>
 
     </View>
   )
